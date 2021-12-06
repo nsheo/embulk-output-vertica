@@ -6,6 +6,7 @@ in:
     charset: UTF-8
     newline: CRLF
     null_string: 'NULL'
+    delimiter: '|'
     skip_header_lines: 1
     comment_line_marker: '#'
     columns:

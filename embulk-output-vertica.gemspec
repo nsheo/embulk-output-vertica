@@ -1,11 +1,11 @@
 Gem::Specification.new do |spec|
-  spec.name          = "embulk-output-vertica"
-  spec.version       = "0.7.4"
-  spec.authors       = ["Naotoshi Seo", "Eiji Sekiya"]
-  spec.email         = ["sonots@gmail.com", "eiji.sekiya.0326@gmail.com"]
-  spec.summary       = "Vertica output plugin for Embulk"
+  spec.name          = "embulk-output-vertica-csv"
+  spec.version       = "0.8.0"
+  spec.authors       = ["NAMSU HEO"]
+  spec.email         = ["nsheo@ntels.com"]
+  spec.summary       = "Vertica output plugin for Embulk edited by nsheo"
   spec.description   = "Dump records to vertica"
-  spec.homepage      = "https://github.com/sonots/embulk-output-vertica"
+  spec.homepage      = "https://github.com/nsheo/embulk-output-vertica"
   spec.license       = "MIT"
 
   spec.files         = `git ls-files -z`.split("\x0")
@@ -13,7 +13,7 @@ Gem::Specification.new do |spec|
   spec.test_files    = spec.files.grep(%r{^(test|spec|features)/})
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "jvertica", ">= 0.2.2"
+  spec.add_dependency "vertica", "~> 1.0.0"
   spec.add_dependency "time_with_zone"
 
   spec.add_development_dependency "bundler", "~> 1.7"

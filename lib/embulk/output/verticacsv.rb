@@ -1,12 +1,12 @@
-require 'jvertica'
+require 'vertica'
 require 'securerandom'
-require_relative 'vertica/value_converter_factory'
-require_relative 'vertica/output_thread'
+require_relative 'verticacsv/value_converter_factory'
+require_relative 'verticacsv/output_thread'
 
 module Embulk
   module Output
-    class Vertica < OutputPlugin
-      Plugin.register_output('vertica', self)
+    class VerticaCSV < OutputPlugin
+      Plugin.register_output('vertica-csv', self)
 
       class Error < StandardError; end
       class NotSupportedType < Error; end
@@ -42,13 +42,15 @@ module Embulk
           'database'         => config.param('database',         :string,  :default => 'vdb'),
           'schema'           => config.param('schema',           :string,  :default => 'public'),
           'table'            => config.param('table',            :string),
+		  'load_time_col'    => config.param('load_time_col',    :string,  :default => nil), #column name for loading time
+		  'time_format'      =>
           'mode'             => config.param('mode',             :string,  :default => 'insert'),
           'copy_mode'        => config.param('copy_mode',        :string,  :default => 'AUTO'),
           'abort_on_error'   => config.param('abort_on_error',   :bool,    :default => false),
           'compress'         => config.param('compress',         :string,  :default => 'UNCOMPRESSED'),
           'default_timezone' => config.param('default_timezone', :string, :default => 'UTC'),
           'column_options'   => config.param('column_options',   :hash,    :default => {}),
-          'json_payload'     => config.param('json_payload',     :bool,    :default => false),
+          'csv_payload'      => config.param('csv_payload',     :bool,    :default => false),
           'resource_pool'    => config.param('resource_pool',    :string,  :default => nil),
           'reject_on_materialized_type_error' => config.param('reject_on_materialized_type_error', :bool, :default => false),
           'pool'             => config.param('pool',             :integer, :default => task_count),
@@ -58,7 +60,7 @@ module Embulk
         }
 
         @thread_pool_proc = Proc.new do
-          OutputThreadPool.new(task, schema, task['pool'])
+          OutputThreadPool.new(task, schema, task['pool'], @load_time_col)
         end
 
         task['user'] ||= task['username']
@@ -91,7 +93,7 @@ module Embulk
         quoted_temp_table = ::Jvertica.quote_identifier(task['temp_table'])
 
         connect(task) do |jv|
-          unless task['json_payload'] # ToDo: auto table creation is not supported to json_payload mode yet
+          unless task['csv_payload'] # ToDo: auto table creation is not supported to csv_payload mode
             sql_schema_table = self.sql_schema_from_embulk_schema(schema, task['column_options'])
 
             # create the target table
@@ -146,6 +148,7 @@ module Embulk
             else
               # insert select from the temp table
               hint = '/*+ direct */ ' if task['copy_mode'] == 'DIRECT' # I did not prepare a specific option, does anyone want?
+			  //query(jv, %[COPY #{hint}INTO #{quoted_schema}.#{quoted_table} SELECT * FROM #{quoted_schema}.#{quoted_temp_table}])
               query(jv, %[INSERT #{hint}INTO #{quoted_schema}.#{quoted_table} SELECT * FROM #{quoted_schema}.#{quoted_temp_table}])
               jv.commit
             end
@@ -191,7 +194,7 @@ module Embulk
       private
 
       def self.connect(task)
-        jv = ::Jvertica.connect({
+        jv = ::Vertica.connect({
           host: task['host'],
           port: task['port'],
           user: task['user'],
@@ -200,7 +203,7 @@ module Embulk
         })
 
         if resource_pool = task['resource_pool']
-          query(jv, "SET SESSION RESOURCE_POOL = #{::Jvertica.quote(resource_pool)}")
+          query(jv, "SET SESSION RESOURCE_POOL = #{::Vertica.quote(resource_pool)}")
         end
 
         if block_given?

@@ -13,22 +13,28 @@ module Embulk
       $embulk_output_vertica_thread_dumped = false
 
       class OutputThreadPool
-        def initialize(task, schema, size)
+        def initialize(task, schema, size, add_time_col)
           @task = task
           @size = size
           @schema = schema
+          @add_time_col = add_time_col
           @converters = ValueConverterFactory.create_converters(schema, task['default_timezone'], task['column_options'])
           @output_threads = size.times.map { OutputThread.new(task) }
           @current_index = 0
         end
 
         def enqueue(page)
-          json_page = []
+          csv_data = []
+          current_time = Time.now
           page.each do |record|
-            json_page << to_json(record)
+            csv_data << to_csv(record)
+            unless @add_time_col.nil? 
+              csv_data << '|' << @converters[column_name].call(current_time) 
+            end
+            csv_data << '\n'
           end
           @mutex.synchronize do
-            @output_threads[@current_index].enqueue(json_page)
+            @output_threads[@current_index].enqueue(csv_data)
             @current_index = (@current_index + 1) % @size
           end
         end
@@ -49,13 +55,13 @@ module Embulk
           task_reports
         end
 
-        def to_json(record)
-          if @task['json_payload']
+        def to_csv(record)
+          if @task['csv_payload']
             record.first
           else
             Hash[*(@schema.names.zip(record).map do |column_name, value|
               [column_name, @converters[column_name].call(value)]
-            end.flatten!(1))].to_json
+            end.flatten!(1))].values.map{|v| v.join('|')}.join("")
           end
         end
       end
@@ -192,6 +198,7 @@ module Embulk
 
           [num_output_rows, rejected_row_nums, last_record]
         end
+		
 
         def run
           Embulk.logger.debug { "embulk-output-vertica: thread started" }
@@ -288,19 +295,15 @@ module Embulk
         # private
 
         def copy_sql
-          @copy_sql ||= "COPY #{quoted_schema}.#{quoted_temp_table} FROM STDIN#{compress}#{fjsonparser}#{copy_mode}#{abort_on_error} NO COMMIT"
+          @copy_sql ||= "COPY #{quoted_schema}.#{quoted_table} FROM STDIN#{compress}#{delimiter}#{copy_mode}#{abort_on_error} NO COMMIT"
         end
 
         def quoted_schema
-          ::Jvertica.quote_identifier(@task['schema'])
+          ::Vertica.quote_identifier(@task['schema'])
         end
 
         def quoted_table
-          ::Jvertica.quote_identifier(@task['table'])
-        end
-
-        def quoted_temp_table
-          ::Jvertica.quote_identifier(@task['temp_table'])
+          ::Vertica.quote_identifier(@task['table'])
         end
 
         def compress
@@ -311,12 +314,12 @@ module Embulk
           " #{@task['copy_mode']}"
         end
 
-        def abort_on_error
-          @task['abort_on_error'] ? ' ABORT ON ERROR' : ''
+        def delimiter
+          " DELIMITER '|' RECORD TERMINATOR E'\n' ENFORCELENGTH "
         end
 
-        def fjsonparser
-          " PARSER fjsonparser(#{reject_on_materialized_type_error})"
+        def abort_on_error
+          @task['abort_on_error'] ? ' ABORT ON ERROR' : ''
         end
 
         def reject_on_materialized_type_error
