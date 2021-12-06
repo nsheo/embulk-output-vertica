@@ -76,13 +76,6 @@ module Embulk
           @thread_active = false
           @progress_log_timer = Time.now
           @previous_num_input_rows = 0
-
-          case task['compress']
-          when 'GZIP'
-            @write_proc = self.method(:write_gzip)
-          else
-            @write_proc = self.method(:write_uncompressed)
-          end
         end
 
         def thread_dump
@@ -107,51 +100,6 @@ module Embulk
             thread_dump
             raise RuntimeError, "embulk-output-verticacsv: thread is died, but still trying to enqueue"
           end
-        end
-
-        def write_gzip(io, page, &block)
-          buf = Zlib::Deflate.new
-          write_buf(buf, page, &block)
-          write_io(io, buf.finish)
-        end
-
-        def write_uncompressed(io, page, &block)
-          buf = ''
-          write_buf(buf, page, &block)
-          write_io(io, buf)
-        end
-
-        PIPE_BUF = 4096
-
-        def write_io(io, str)
-          str = str.force_encoding('ASCII-8BIT')
-          i = 0
-          # split str not to be blocked (max size of pipe buf is 64k bytes on Linux, Mac at default)
-          while substr = str[i, PIPE_BUF]
-            Embulk.logger.trace { "embulk-output-verticacsv: io.write with write_timeout:#{@task['write_timeout']}" }
-            Timeout.timeout(@task['write_timeout'], WriteTimeoutError) { io.write(substr) }
-            i += PIPE_BUF
-          end
-        end
-
-        def write_buf(buf, csv_data, &block)
-          csv_data.each do |record|
-            yield(record) if block_given?
-            Embulk.logger.trace { "embulk-output-verticacsv: record #{record}" }
-            buf << record << "\n"
-            @num_input_rows += 1
-          end
-          now = Time.now
-          if @progress_log_timer < now - 10 # once in 10 seconds
-            speed = ((@num_input_rows - @previous_num_input_rows) / (now - @progress_log_timer).to_f).round(1)
-            @progress_log_timer = now
-            @previous_num_input_rows = @num_input_rows
-            Embulk.logger.info { "embulk-output-verticacsv: num_input_rows #{num_format(@num_input_rows)} (#{num_format(speed)} rows/sec)" }
-          end
-        end
-
-        def num_format(number)
-          number.to_s.gsub(/(\d)(?=(\d{3})+(?!\d))/, '\1,')
         end
 
         # @return [Array] dequeued csv_data
