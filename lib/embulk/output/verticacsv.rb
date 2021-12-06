@@ -60,7 +60,7 @@ module Embulk
         }
 
         @thread_pool_proc = Proc.new do
-          OutputThreadPool.new(task, schema, task['pool'], @load_time_col, @delimiter)
+          OutputThreadPool.new(task, schema, task['pool'])
         end
 
         task['user'] ||= task['username']
