@@ -6,7 +6,7 @@ require_relative 'verticacsv/output_thread'
 module Embulk
   module Output
     class VerticaCSV < OutputPlugin
-      Plugin.register_output('vertica-csv', self)
+      Plugin.register_output('verticacsv', self)
 
       class Error < StandardError; end
       class NotSupportedType < Error; end
@@ -16,17 +16,17 @@ module Embulk
       end
 
       def self.transaction_report(jv, task, task_reports)
-        quoted_schema     = ::Jvertica.quote_identifier(task['schema'])
-        quoted_temp_table = ::Jvertica.quote_identifier(task['temp_table'])
+        quoted_schema     = ::Vertica.quote_identifier(task['schema'])
+        quoted_table = ::Vertica.quote_identifier(task['table'])
 
         num_input_rows = task_reports.map {|report| report['num_input_rows'].to_i }.inject(:+)
-        num_response_rows = task_reports.map {|report| report['num_output_rows'].to_i }.inject(:+)
-        result = query(jv, %[SELECT COUNT(*) FROM #{quoted_schema}.#{quoted_temp_table}])
+        num_total_rows = task_reports.map {|report| report['num_output_rows'].to_i }.inject(:+)
+        result = query(jv, %[SELECT COUNT(*) FROM #{quoted_schema}.#{quoted_table}])
         num_output_rows = result.map {|row| row.values }.flatten.first.to_i
         num_rejected_rows = num_input_rows - num_output_rows
         transaction_report = {
           'num_input_rows' => num_input_rows,
-          'num_response_rows' => num_response_rows,
+          'num_total_rows' => num_total_rows,
           'num_output_rows' => num_output_rows,
           'num_rejected_rows' => num_rejected_rows,
         }
@@ -42,10 +42,10 @@ module Embulk
           'database'         => config.param('database',         :string,  :default => 'vdb'),
           'schema'           => config.param('schema',           :string,  :default => 'public'),
           'table'            => config.param('table',            :string),
-		  'load_time_col'    => config.param('load_time_col',    :string,  :default => nil), #column name for loading time
-		  'time_format'      =>
-          'mode'             => config.param('mode',             :string,  :default => 'insert'),
-          'copy_mode'        => config.param('copy_mode',        :string,  :default => 'AUTO'),
+		      'load_time_col'    => config.param('load_time_col',    :string,  :default => nil), #column name for loading time
+		      'delimiter_str'    => config.param('delimiter_str',    :string,  :default => '|'), #Delimiter for vertica copy
+          'mode'             => config.param('mode',             :string,  :default => 'DIRECT_COPY'),
+          'copy_mode'        => config.param('copy_mode',        :string,  :default => 'DIRECT'),
           'abort_on_error'   => config.param('abort_on_error',   :bool,    :default => false),
           'compress'         => config.param('compress',         :string,  :default => 'UNCOMPRESSED'),
           'default_timezone' => config.param('default_timezone', :string, :default => 'UTC'),
@@ -60,7 +60,7 @@ module Embulk
         }
 
         @thread_pool_proc = Proc.new do
-          OutputThreadPool.new(task, schema, task['pool'], @load_time_col)
+          OutputThreadPool.new(task, schema, task['pool'], @load_time_col, @delimiter)
         end
 
         task['user'] ||= task['username']
@@ -69,8 +69,8 @@ module Embulk
         end
 
         task['mode'] = task['mode'].upcase
-        unless %w[INSERT REPLACE DROP_INSERT].include?(task['mode'])
-          raise ConfigError.new "`mode` must be one of INSERT, REPLACE, DROP_INSERT"
+        unless %w[DIRECT_COPY].include?(task['mode'])
+          raise ConfigError.new "`mode` must be one of DIRECT_COPY"
         end
 
         task['copy_mode'] = task['copy_mode'].upcase
@@ -86,50 +86,19 @@ module Embulk
 
         now = Time.now
         unique_name = SecureRandom.uuid
-        task['temp_table'] = "#{task['table']}_LOAD_TEMP_#{unique_name}"
-
-        quoted_schema     = ::Jvertica.quote_identifier(task['schema'])
-        quoted_table      = ::Jvertica.quote_identifier(task['table'])
-        quoted_temp_table = ::Jvertica.quote_identifier(task['temp_table'])
-
-        connect(task) do |jv|
-          unless task['csv_payload'] # ToDo: auto table creation is not supported to csv_payload mode
-            sql_schema_table = self.sql_schema_from_embulk_schema(schema, task['column_options'])
-
-            # create the target table
-            query(jv, %[DROP TABLE IF EXISTS #{quoted_schema}.#{quoted_table}]) if task['mode'] == 'DROP_INSERT'
-            query(jv, %[CREATE TABLE IF NOT EXISTS #{quoted_schema}.#{quoted_table} (#{sql_schema_table})])
-          end
-
-          # create a temp table
-          query(jv, %[DROP TABLE IF EXISTS #{quoted_schema}.#{quoted_temp_table}])
-
-          if task['mode'] == 'REPLACE'
-            # In the case of replace mode, this temp table is replaced with the original table. So, projections should also be copied
-            query(jv, %[CREATE TABLE #{quoted_schema}.#{quoted_temp_table} LIKE #{quoted_schema}.#{quoted_table} INCLUDING PROJECTIONS])
-          else
-            query(jv, %[CREATE TABLE #{quoted_schema}.#{quoted_temp_table} LIKE #{quoted_schema}.#{quoted_table}])
-            # Create internal vertica projection beforehand, otherwirse, parallel copies lock table to create a projection and we get S Lock error sometimes
-            # This is a trick to create internal vertica projection
-            query(jv, %[INSERT INTO #{quoted_schema}.#{quoted_temp_table} SELECT * FROM #{quoted_schema}.#{quoted_table} LIMIT 0])
-          end
-          Embulk.logger.trace {
-            result = query(jv, %[SELECT EXPORT_OBJECTS('', '#{task['schema']}.#{task['temp_table']}')])
-            # You can see `CREATE PROJECTION` if the table has a projection
-            "embulk-output-vertica: #{result.to_a.flatten}"
-          }
-        end
+        quoted_schema     = ::Vertica.quote_identifier(task['schema'])
+        quoted_table      = ::Vertica.quote_identifier(task['table'])
 
         begin
           # insert data into the temp table
           thread_pool.start
           yield(task)
           task_reports = thread_pool.commit
-          Embulk.logger.info { "embulk-output-vertica: task_reports: #{task_reports.to_json}" }
+          Embulk.logger.info { "embulk-output-verticacsv: task_reports: #{task_reports.to_json}" }
 
           connect(task) do |jv|
             transaction_report = self.transaction_report(jv, task, task_reports)
-            Embulk.logger.info { "embulk-output-vertica: transaction_report: #{transaction_report.to_json}" }
+            Embulk.logger.info { "embulk-output-verticacsv: transaction_report: #{transaction_report.to_json}" }
 
             if task['abort_on_error'] # double-meaning, also used for COPY statement
               if transaction_report['num_input_rows'] != transaction_report['num_output_rows']
@@ -137,27 +106,10 @@ module Embulk
                   "`num_output_rows (#{transaction_report['num_output_rows']})` does not match"
               end
             end
-
-            if task['mode'] == 'REPLACE'
-              # swap table and drop the old table
-              quoted_old_table = ::Jvertica.quote_identifier("#{task['table']}_LOAD_OLD_#{unique_name}")
-              from = "#{quoted_schema}.#{quoted_table},#{quoted_schema}.#{quoted_temp_table}"
-              to   = "#{quoted_old_table},#{quoted_table}"
-              query(jv, %[ALTER TABLE #{from} RENAME TO #{to}])
-              query(jv, %[DROP TABLE #{quoted_schema}.#{quoted_old_table}])
-            else
-              # insert select from the temp table
-              hint = '/*+ direct */ ' if task['copy_mode'] == 'DIRECT' # I did not prepare a specific option, does anyone want?
-			  //query(jv, %[COPY #{hint}INTO #{quoted_schema}.#{quoted_table} SELECT * FROM #{quoted_schema}.#{quoted_temp_table}])
-              query(jv, %[INSERT #{hint}INTO #{quoted_schema}.#{quoted_table} SELECT * FROM #{quoted_schema}.#{quoted_temp_table}])
-              jv.commit
-            end
           end
         ensure
           connect(task) do |jv|
-            # clean up the temp table
-            query(jv, %[DROP TABLE IF EXISTS #{quoted_schema}.#{quoted_temp_table}])
-            Embulk.logger.trace { "embulk-output-vertica: select result\n#{query(jv, %[SELECT * FROM #{quoted_schema}.#{quoted_table} LIMIT 10]).map {|row| row.to_h }.join("\n") rescue nil}" }
+            Embulk.logger.trace { "embulk-output-verticacsv: select result\n#{query(jv, %[SELECT * FROM #{quoted_schema}.#{quoted_table} LIMIT 10]).map {|row| row.to_h }.join("\n") rescue nil}" }
           end
         end
         # this is for -o next_config option, add some paramters for next time execution if wants
@@ -228,7 +180,7 @@ module Embulk
           end
           [column_name, sql_type]
         end
-        sql_schema.map {|name, type| "#{::Jvertica.quote_identifier(name)} #{type}" }.join(',')
+        sql_schema.map {|name, type| "#{::Vertica.quote_identifier(name)} #{type}" }.join(',')
       end
 
       def self.sql_type_from_embulk_type(type)
@@ -243,7 +195,7 @@ module Embulk
       end
 
       def self.query(conn, sql)
-        Embulk.logger.info "embulk-output-vertica: #{sql}"
+        Embulk.logger.info "embulk-output-verticacsv: #{sql}"
         conn.query(sql)
       end
 
