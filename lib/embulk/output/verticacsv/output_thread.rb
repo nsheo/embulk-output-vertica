@@ -59,7 +59,7 @@ module Embulk
           if @task['csv_payload']
             record.first
           else
-            record.map.join(@task['delimiter_str'])
+            record * @task['delimiter_str']
           end
         end
       end
