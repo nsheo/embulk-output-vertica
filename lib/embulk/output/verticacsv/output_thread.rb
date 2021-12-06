@@ -61,7 +61,8 @@ module Embulk
             buffer_data = Hash[*(@schema.names.zip(record).map do |column_name, value|
               [column_name, @converters[column_name].call(value)]
             end.flatten!(1))]
-            buffer_data.values.map{|v| v.join(@task['delimiter_str'])}.join("")
+            Embulk.logger.debug { "embulk-output-verticacsv: check data #{buffer_data}" }
+            buffer_data.values.map{|v| v.join(@task['delimiter_str'])}
           end
         end
       end
