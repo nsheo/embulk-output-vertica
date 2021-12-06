@@ -23,7 +23,8 @@ module Embulk
         end
 
         def enqueue(page)
-          csv_data = []
+          task['temp_file'] = Tempfile.new("vertica-copy-temp")
+          csv_data = ""
           #Embulk.logger.debug { "embulk-output-verticacsv: Check timeformat #{@task['column_options'][@task['load_time_col']]['timestamp_format']}" }
           current_time = Time.now.strftime(@task['column_options'][@task['load_time_col']]['timestamp_format'])
           page.each do |record|
@@ -31,7 +32,9 @@ module Embulk
             unless @task['load_time_col'].nil? 
               csv_data << @task['delimiter_str'] << current_time
             end
+            task['temp_file'].write csv_data + "\n"
           end
+          task['temp_file'].close
           #Embulk.logger.debug { "embulk-output-verticacsv: Check data 2 #{csv_data}" }
           @mutex.synchronize do
             @output_threads[@current_index].enqueue(csv_data)
@@ -113,7 +116,7 @@ module Embulk
           csv_data
         end
 
-        def copy(jv, sql, &block)
+        def copy(jv, sql)
           Embulk.logger.debug "embulk-output-verticacsv: copy, waiting a first message"
 
           num_output_rows = 0; rejected_row_nums = []; last_record = nil
@@ -122,16 +125,8 @@ module Embulk
           return [num_output_rows, rejected_row_nums, last_record] if csv_data == 'finish'
 
           Embulk.logger.debug "embulk-output-verticacsv: #{sql}"
-
-          num_output_rows, rejected_row_nums = jv.copy(sql) do |stdin, stream|
-            @write_proc.call(stdin, csv_data) {|record| last_record = record }
-
-            while true
-              csv_data = dequeue
-              break if csv_data == 'finish'
-              @write_proc.call(stdin, csv_data) {|record| last_record = record }
-            end
-          end
+          
+          num_output_rows, rejected_row_nums = jv.copy(sql, source: task['temp_file'].path)
 
           @num_output_rows += num_output_rows
           @num_rejected_rows += rejected_row_nums.size
@@ -242,7 +237,7 @@ module Embulk
         # private
 
         def copy_sql
-          @copy_sql ||= "COPY #{quoted_schema}.#{quoted_table} (#{column_info}) FROM STDIN#{delimiter}#{abort_on_error}#{copy_mode} NO COMMIT"
+          @copy_sql ||= "COPY #{@task['schema']}.#{@task['table']} (#{column_info}) FROM STDIN#{delimiter}#{abort_on_error}#{copy_mode} NO COMMIT"
         end
 
         def quoted_schema

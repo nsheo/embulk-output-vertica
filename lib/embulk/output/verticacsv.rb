@@ -1,4 +1,5 @@
 require 'vertica'
+require 'tempfile'
 require 'securerandom'
 require_relative 'verticacsv/value_converter_factory'
 require_relative 'verticacsv/output_thread'
