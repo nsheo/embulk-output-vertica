@@ -24,11 +24,12 @@ module Embulk
 
         def enqueue(page)
           csv_data = []
-          current_time = Time.now
+          Embulk.logger.debug { "embulk-output-verticacsv: Check timeformat #{@task['column_options'][@task['load_time_col']]['timestamp_format']}" }
+          current_time = Time.now.strftime(@task['column_options'][@task['load_time_col']]['timestamp_format'])
           page.each do |record|
             csv_data << to_csv(record)
             unless @task['load_time_col'].nil? 
-              csv_data << @task['delimiter_str'] << @converters[@task['load_time_col']].call(current_time) 
+              csv_data << @task['delimiter_str'] << current_time
             end
           end
           Embulk.logger.debug { "embulk-output-verticacsv: Check data 2 #{csv_data}" }
