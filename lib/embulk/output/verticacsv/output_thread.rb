@@ -25,7 +25,6 @@ module Embulk
         def enqueue(page)
           csv_data = []
           current_time = Time.now
-          Embulk.logger.info { "embulk-output-verticacsv: Check table Column #{table_col_info}" }
           page.each do |record|
             csv_data << to_csv(record)
             unless @add_time_col.nil? 
