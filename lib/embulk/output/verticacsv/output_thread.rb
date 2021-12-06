@@ -27,7 +27,10 @@ module Embulk
           current_time = Time.now
           page.each do |record|
             csv_data << to_csv(record)
-            Embulk.logger.debug { "embulk-output-verticacsv: Check data #{csv_data}" }
+            unless @task['add_time_col'].nil? 
+              csv_data << @task['delimiter_str'] << @converters[@task['add_time_col']].call(current_time) 
+            end
+            Embulk.logger.debug { "embulk-output-verticacsv: Check data 2 #{csv_data}" }
           end
           @mutex.synchronize do
             @output_threads[@current_index].enqueue(csv_data, table_col_info)
@@ -56,9 +59,7 @@ module Embulk
           if @task['csv_payload']
             record.first
           else
-            Hash[*(@schema.names.zip(record).map do |column_name, value|
-              [column_name, @converters[column_name].call(value)]
-            end.flatten!(1))].values.map{|v| v.to_s * @task['delimiter_str']}
+            record.map.join(@task['delimiter_str'])
           end
         end
       end
