@@ -27,11 +27,7 @@ module Embulk
           current_time = Time.now
           page.each do |record|
             csv_data << to_csv(record)
-            Embulk.logger.debug { "embulk-output-verticacsv: Check data 1 #{csv_data}" }
-            unless @task['add_time_col'].nil? 
-              csv_data << @task['delimiter_str'] << @converters[@task['add_time_col']].call(current_time) 
-            end
-            Embulk.logger.debug { "embulk-output-verticacsv: Check data 2 #{csv_data}" }
+            Embulk.logger.debug { "embulk-output-verticacsv: Check data #{csv_data}" }
           end
           @mutex.synchronize do
             @output_threads[@current_index].enqueue(csv_data, table_col_info)
@@ -56,14 +52,14 @@ module Embulk
         end
 
         def to_csv(record)
+          Embulk.logger.debug { "embulk-output-verticacsv: check data #{record}" }
           if @task['csv_payload']
             record.first
           else
-            buffer_data = Hash[*(@schema.names.zip(record).map do |column_name, value|
+            #Embulk.logger.debug { "embulk-output-verticacsv: check data #{buffer_data.values}" }
+            Hash[*(@schema.names.zip(record).map do |column_name, value|
               [column_name, @converters[column_name].call(value)]
-            end.flatten!(1))]
-            Embulk.logger.debug { "embulk-output-verticacsv: check data #{buffer_data.values}" }
-            buffer_data.values.map{|v| v.to_s * @task['delimiter_str']}
+            end.flatten!(1))].values.map{|v| v.to_s * @task['delimiter_str']}
           end
         end
       end
