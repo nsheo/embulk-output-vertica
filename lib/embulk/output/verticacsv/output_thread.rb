@@ -23,7 +23,7 @@ module Embulk
         end
 
         def enqueue(page)
-          task['temp_file'] = Tempfile.new("vertica-copy-temp")
+          @task['temp_file'] = Tempfile.new("vertica-copy-temp")
           csv_data = ""
           #Embulk.logger.debug { "embulk-output-verticacsv: Check timeformat #{@task['column_options'][@task['load_time_col']]['timestamp_format']}" }
           current_time = Time.now.strftime(@task['column_options'][@task['load_time_col']]['timestamp_format'])
