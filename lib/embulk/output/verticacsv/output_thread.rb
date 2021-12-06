@@ -126,7 +126,7 @@ module Embulk
 
           Embulk.logger.debug "embulk-output-verticacsv: #{sql}"
           
-          num_output_rows, rejected_row_nums = jv.copy(sql, source: task['temp_file'].path)
+          num_output_rows, rejected_row_nums = jv.copy(sql, source: @task['temp_file'].path)
 
           @num_output_rows += num_output_rows
           @num_rejected_rows += rejected_row_nums.size
