@@ -32,9 +32,9 @@ module Embulk
             unless @task['load_time_col'].nil? 
               csv_data << @task['delimiter_str'] << current_time
             end
-            task['temp_file'].write csv_data + "\n"
+            @task['temp_file'].write csv_data + "\n"
           end
-          task['temp_file'].close
+          @task['temp_file'].close
           #Embulk.logger.debug { "embulk-output-verticacsv: Check data 2 #{csv_data}" }
           @mutex.synchronize do
             @output_threads[@current_index].enqueue(csv_data)
