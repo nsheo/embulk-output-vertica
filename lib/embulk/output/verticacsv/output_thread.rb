@@ -27,13 +27,13 @@ module Embulk
           current_time = Time.now
           page.each do |record|
             csv_data << to_csv(record)
-            unless @task['add_time_col'].nil? 
-              csv_data << @task['delimiter_str'] << @converters[@task['add_time_col']].call(current_time) 
+            unless @task['load_time_col'].nil? 
+              csv_data << @task['delimiter_str'] << @converters[@task['load_time_col']].call(current_time) 
             end
-            Embulk.logger.debug { "embulk-output-verticacsv: Check data 2 #{csv_data}" }
           end
+          Embulk.logger.debug { "embulk-output-verticacsv: Check data 2 #{csv_data}" }
           @mutex.synchronize do
-            @output_threads[@current_index].enqueue(csv_data, table_col_info)
+            @output_threads[@current_index].enqueue(csv_data)
             @current_index = (@current_index + 1) % @size
           end
         end
