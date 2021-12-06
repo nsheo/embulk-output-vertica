@@ -62,7 +62,7 @@ module Embulk
               [column_name, @converters[column_name].call(value)]
             end.flatten!(1))]
             Embulk.logger.debug { "embulk-output-verticacsv: check data #{buffer_data.values}" }
-            buffer_data.values.map{|v| v * @task['delimiter_str']}
+            buffer_data.values.map{|v| v.to_s * @task['delimiter_str']}
           end
         end
       end
