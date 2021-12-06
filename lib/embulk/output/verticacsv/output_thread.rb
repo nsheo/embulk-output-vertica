@@ -52,11 +52,10 @@ module Embulk
         end
 
         def to_csv(record)
-          Embulk.logger.debug { "embulk-output-verticacsv: check data #{record}" }
+          Embulk.logger.debug { "embulk-output-verticacsv: check record #{record}" }
           if @task['csv_payload']
             record.first
           else
-            #Embulk.logger.debug { "embulk-output-verticacsv: check data #{buffer_data.values}" }
             Hash[*(@schema.names.zip(record).map do |column_name, value|
               [column_name, @converters[column_name].call(value)]
             end.flatten!(1))].values.map{|v| v.to_s * @task['delimiter_str']}
