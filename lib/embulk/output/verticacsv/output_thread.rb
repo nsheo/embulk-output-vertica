@@ -24,7 +24,7 @@ module Embulk
 
         def enqueue(page)
           csv_data = []
-          Embulk.logger.debug { "embulk-output-verticacsv: Check timeformat #{@task['column_options'][@task['load_time_col']]['timestamp_format']}" }
+          #Embulk.logger.debug { "embulk-output-verticacsv: Check timeformat #{@task['column_options'][@task['load_time_col']]['timestamp_format']}" }
           current_time = Time.now.strftime(@task['column_options'][@task['load_time_col']]['timestamp_format'])
           page.each do |record|
             csv_data << to_csv(record)
@@ -32,7 +32,7 @@ module Embulk
               csv_data << @task['delimiter_str'] << current_time
             end
           end
-          Embulk.logger.debug { "embulk-output-verticacsv: Check data 2 #{csv_data}" }
+          #Embulk.logger.debug { "embulk-output-verticacsv: Check data 2 #{csv_data}" }
           @mutex.synchronize do
             @output_threads[@current_index].enqueue(csv_data)
             @current_index = (@current_index + 1) % @size
@@ -306,10 +306,8 @@ module Embulk
         end
 
         def column_info
-          sql_schema = @task['column_options'].map do |column_name, type|
-            [column_name]
-          end
-          sql_schema.map {|name| "#{::Vertica.quote_identifier(name)} " }.join(',')
+          sql_schema = @task['column_options'].keys
+          sql_schema * ', '
         end
 
         def compress
