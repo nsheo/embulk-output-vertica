@@ -242,7 +242,7 @@ module Embulk
         # private
 
         def copy_sql
-          @copy_sql ||= "COPY #{quoted_schema}.#{quoted_table} (#{column_info}) FROM STDIN#{compress}#{delimiter}#{abort_on_error}#{copy_mode} NO COMMIT"
+          @copy_sql ||= "COPY #{quoted_schema}.#{quoted_table} (#{column_info}) FROM STDIN#{delimiter}#{abort_on_error}#{copy_mode} NO COMMIT"
         end
 
         def quoted_schema
