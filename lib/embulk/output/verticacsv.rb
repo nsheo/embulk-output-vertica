@@ -88,6 +88,10 @@ module Embulk
         unique_name = SecureRandom.uuid
         quoted_schema     = ::Vertica.quote_identifier(task['schema'])
         quoted_table      = ::Vertica.quote_identifier(task['table'])
+        
+        connect(task) do |jv|
+          Embulk.logger.info { "embulk-output-verticacsv: Vertica Connection start" }
+        end
 
         begin
           # insert data into the temp table
