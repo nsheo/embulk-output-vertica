@@ -3,7 +3,7 @@ require 'time_with_zone'
 
 module Embulk
   module Output
-    class Vertica < OutputPlugin
+    class VerticaCSV < OutputPlugin
       class ValueConverterFactory
         attr_reader :schema_type, :value_type, :timestamp_format, :timezone, :zone_offset
 

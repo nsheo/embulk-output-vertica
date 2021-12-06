@@ -3,7 +3,7 @@ require 'timeout'
 
 module Embulk
   module Output
-    class Vertica < OutputPlugin
+    class VerticaCSV < OutputPlugin
       class CommitError < ::StandardError; end
       class TimeoutError < ::Timeout::Error; end
       class DequeueTimeoutError < TimeoutError; end
