@@ -47,7 +47,6 @@ module Embulk
           'mode'             => config.param('mode',             :string,  :default => 'DIRECT_COPY'),
           'copy_mode'        => config.param('copy_mode',        :string,  :default => 'DIRECT'),
           'abort_on_error'   => config.param('abort_on_error',   :bool,    :default => false),
-          'compress'         => config.param('compress',         :string,  :default => 'UNCOMPRESSED'),
           'default_timezone' => config.param('default_timezone', :string, :default => 'UTC'),
           'column_options'   => config.param('column_options',   :hash,    :default => {}),
           'csv_payload'      => config.param('csv_payload',     :bool,    :default => false),
@@ -78,19 +77,13 @@ module Embulk
           raise ConfigError.new "`copy_mode` must be one of AUTO, DIRECT, TRICKLE"
         end
 
-        # ToDo: Support BZIP, LZO
-        task['compress'] = task['compress'].upcase
-        unless %w[GZIP UNCOMPRESSED].include?(task['compress'])
-          raise ConfigError.new "`compress` must be one of GZIP, UNCOMPRESSED"
-        end
-
         now = Time.now
         unique_name = SecureRandom.uuid
         quoted_schema     = ::Vertica.quote_identifier(task['schema'])
         quoted_table      = ::Vertica.quote_identifier(task['table'])
         
         connect(task) do |jv|
-          Embulk.logger.info { "embulk-output-verticacsv: Vertica Connection start" }
+          Embulk.logger.info { "embulk-output-verticacsv: VerticaConnection start" }
         end
 
         begin
