@@ -242,7 +242,7 @@ module Embulk
         # private
 
         def copy_sql
-          @copy_sql ||= "COPY #{quoted_schema}.#{quoted_table} (#{column_info}) FROM STDIN#{compress}#{delimiter}#{copy_mode}#{abort_on_error} NO COMMIT"
+          @copy_sql ||= "COPY #{quoted_schema}.#{quoted_table} (#{column_info}) FROM STDIN#{compress}#{delimiter}#{abort_on_error}#{copy_mode} NO COMMIT"
         end
 
         def quoted_schema
@@ -258,16 +258,12 @@ module Embulk
           sql_schema * ', '
         end
 
-        def compress
-          " #{@task['compress']}"
-        end
-
         def copy_mode
           " #{@task['copy_mode']}"
         end
 
         def delimiter
-          " DELIMITER '#{@task['delimiter_str']}' RECORD TERMINATOR E'\n' ENFORCELENGTH "
+          " DELIMITER '#{@task['delimiter_str']}' RECORD TERMINATOR E'\n' ENFORCELENGTH"
         end
 
         def abort_on_error
