@@ -204,7 +204,7 @@ module Embulk
         def run
           Embulk.logger.debug { "embulk-output-verticacsv: thread started" }
           begin
-            jv = Vertica.connect(@task)
+            jv = VerticaCSV.connect(@task)
             begin
               num_output_rows, rejected_row_nums, last_record = copy(jv, copy_sql)
               Embulk.logger.debug { "embulk-output-verticacsv: thread finished" }
