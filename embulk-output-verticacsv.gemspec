@@ -1,5 +1,5 @@
 Gem::Specification.new do |spec|
-  spec.name          = "embulk-output-vertica-csv"
+  spec.name          = "embulk-output-verticacsv"
   spec.version       = "0.8.0"
   spec.authors       = ["NAMSU HEO"]
   spec.email         = ["nsheo@ntels.com"]
